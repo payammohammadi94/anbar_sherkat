@@ -38,7 +38,6 @@ class ResponsibleForQC(models.Model):
         verbose_name = "مسئول QC"
         verbose_name_plural = "مسئول QC"
 
-
 class ProductPart(models.Model):
     product_part = models.CharField(max_length=255, verbose_name="پارت کالا")
     created_by = models.ForeignKey(
@@ -70,7 +69,6 @@ class ProductCode(models.Model):
     class Meta:
         verbose_name = "کد کالا"
         verbose_name_plural = "کد کالا"
-
 
 class QuarantineWarehouse(models.Model):
     DESTINATION_CHOICES = [
@@ -212,8 +210,8 @@ class ReturnedProduct(models.Model):
         return f"بازگشتی: {self.piece_name} ({self.item_code})"
 
     class Meta:
-        verbose_name = "محصول بازگشتی"
-        verbose_name_plural = "محصولات بازگشتی"
+        verbose_name = "محصول بازگشتی به فروشنده"
+        verbose_name_plural = "محصولات بازگشتی به فروشنده"
 
 class ProductRawMaterial(models.Model):
     created_by = models.ForeignKey(
@@ -323,7 +321,6 @@ class ProductRawMaterial(models.Model):
         verbose_name = "ماده اولیه محصول"
         verbose_name_plural = "مواد اولیه محصول"
 
-
 class SecondryWarehouse(models.Model):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -347,7 +344,7 @@ class SecondryWarehouse(models.Model):
     finished_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, verbose_name="قیمت تمام شده")
 
     def __str__(self):
-        return self.product_name
+        return f"{self.product_name} - {self.product_serial_number}"
 
     class Meta:
         verbose_name = "انبار ثانویه"
@@ -453,8 +450,148 @@ class SecondryWarehouseRawMaterial(models.Model):
         super().delete(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.raw_material_name} for {self.product.product_name}"
+        return f"{self.raw_material_name} for {self.secondryWarehouse.product_name}"
 
     class Meta:
         verbose_name = "ماده اولیه انبار ثانویه"
         verbose_name_plural = "مواد اولیه انبار ثانویه"
+
+class ProductSecondryProduct(models.Model):
+    product = models.ForeignKey(
+        'ProductWarehouse',
+        on_delete=models.CASCADE,
+        related_name='secondry_products',
+        verbose_name="محصول نهایی"
+    )
+    secondry_product = models.ForeignKey(
+        SecondryWarehouse,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="محصول ثانویه مصرف‌شده"
+    )
+    quantity = models.IntegerField(verbose_name="تعداد مصرف‌شده از محصول ثانویه")
+
+    def __str__(self):
+        return f"{self.secondry_product} در {self.product}"
+
+    class Meta:
+        verbose_name = "محصول ثانویه در محصول نهایی"
+        verbose_name_plural = "محصولات ثانویه در محصول نهایی"
+
+class ProductDelivery(models.Model):
+    receiver_name = models.CharField(max_length=255, verbose_name="تحویل گیرنده")
+    delivery_date = models.DateField(verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ بازگشت")
+    deliverer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="تحویل دهنده"
+    )
+
+    def __str__(self):
+        return f"{self.receiver_name} - {self.delivery_date}"
+
+    class Meta:
+        verbose_name = "تحویل محصول به افراد داخل شرکت"
+        verbose_name_plural = "تحویل محصولات به افراد داخل شرکت"
+
+class ProductDeliveryProduct(models.Model):
+    delivery = models.ForeignKey(ProductDelivery, on_delete=models.CASCADE, related_name="product_items")
+    product = models.ForeignKey(ProductWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="محصول")
+    quantity = models.IntegerField(verbose_name="تعداد")
+
+class ProductDeliverySecondryProduct(models.Model):
+    delivery = models.ForeignKey(ProductDelivery, on_delete=models.CASCADE, related_name="secondry_items")
+    secondry_product = models.ForeignKey(SecondryWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="محصول ثانویه")
+    quantity = models.IntegerField(verbose_name="تعداد")
+
+class ProductDeliveryRawMaterial(models.Model):
+    delivery = models.ForeignKey(ProductDelivery, on_delete=models.CASCADE, related_name="raw_material_items")
+    raw_material = models.ForeignKey(RawMaterialWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ماده اولیه")
+    quantity = models.IntegerField(verbose_name="تعداد")
+
+
+
+class ExternalProductDelivery(models.Model):
+    receiver_name = models.CharField(max_length=255, verbose_name="تحویل گیرنده (خارج از شرکت)")
+    delivery_date = models.DateField(verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ بازگشت")
+    deliverer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="تحویل دهنده"
+    )
+
+    def __str__(self):
+        return f"{self.receiver_name} - {self.delivery_date}"
+
+    class Meta:
+        verbose_name = "تحویل محصول به خارج از شرکت"
+        verbose_name_plural = "تحویل محصولات به خارج از شرکت"
+
+
+class ExternalProductDeliveryProduct(models.Model):
+    delivery = models.ForeignKey(ExternalProductDelivery, on_delete=models.CASCADE, related_name="product_items")
+    product = models.ForeignKey(ProductWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="محصول")
+    quantity = models.IntegerField(verbose_name="تعداد")
+
+
+class ExternalProductDeliverySecondryProduct(models.Model):
+    delivery = models.ForeignKey(ExternalProductDelivery, on_delete=models.CASCADE, related_name="secondry_items")
+    secondry_product = models.ForeignKey(SecondryWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="محصول ثانویه")
+    quantity = models.IntegerField(verbose_name="تعداد")
+
+
+class ExternalProductDeliveryRawMaterial(models.Model):
+    delivery = models.ForeignKey(ExternalProductDelivery, on_delete=models.CASCADE, related_name="raw_material_items")
+    raw_material = models.ForeignKey(RawMaterialWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ماده اولیه")
+    quantity = models.IntegerField(verbose_name="تعداد")
+
+
+
+
+
+class ReturnedFromCustomer(models.Model):
+    customer_name = models.CharField(max_length=255, verbose_name="نام و نام خانوادگی کارفرما")
+    product_name = models.CharField(max_length=255, verbose_name="نام محصول برگشتی")
+    product_serial_number = models.CharField(max_length=255, verbose_name="شماره سریال محصول")
+    product_part_number = models.CharField(max_length=255, verbose_name="پارت کالا",null=True,blank=True)
+    product_item_code = models.CharField(max_length=255, verbose_name="کد کالا",null=True,blank=True)
+    return_reason = models.TextField(verbose_name="دلیل برگشت")
+    return_date = models.DateField(verbose_name="تاریخ بازگشت")
+    received_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="تحویل گیرنده"
+    )
+
+    def __str__(self):
+        return f"{self.product_name} - {self.customer_name}"
+
+    class Meta:
+        verbose_name = "محصول برگشتی از کارفرما"
+        verbose_name_plural = "محصولات برگشتی از کارفرما"
+    
+
+
+class BorrowedProduct(models.Model):
+    product_name = models.CharField(max_length=255, verbose_name="نام محصول")
+    serial_number = models.CharField(max_length=255, verbose_name="شماره سریال محصول")
+    giver_company = models.CharField(max_length=255, verbose_name="تحویل دهنده (شرکت دیگر)")
+    receiver_person = models.CharField(max_length=255, verbose_name="تحویل گیرنده (داخل شرکت)")
+    delivery_date = models.DateField(verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ بازگرداندن")
+
+    def __str__(self):
+        return f"{self.product_name} - {self.serial_number}"
+
+    class Meta:
+        verbose_name = "محصول امانتی از شرکت دیگر"
+        verbose_name_plural = "محصولات امانتی از شرکت‌های دیگر"

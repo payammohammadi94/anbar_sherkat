@@ -12,6 +12,19 @@ from .models import (
     ResponsibleForQC,
     ProductCode,
     ProductPart,
+    SecondryWarehouse,
+    SecondryWarehouseRawMaterial,
+    ProductSecondryProduct,
+    ProductDelivery,
+    ProductDeliveryProduct,
+    ProductDeliverySecondryProduct,
+    ProductDeliveryRawMaterial,
+    ReturnedFromCustomer,
+    ExternalProductDelivery,
+    ExternalProductDeliveryProduct,
+    ExternalProductDeliverySecondryProduct,
+    ExternalProductDeliveryRawMaterial,
+    BorrowedProduct
 )
 
 # گروه مجاز برای افزودن داده
@@ -25,7 +38,6 @@ class ReadOnlyUnlessSuperuser(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
-
 
 # ====== action ======
 @admin.action(description="انتقال به انبار مواد اولیه")
@@ -154,43 +166,6 @@ class ProductRawMaterialInline(admin.TabularInline):
         'unit', 'serial_number',
     ]
 
-@admin.register(ProductWarehouse)
-class ProductWarehouseAdmin(ReadOnlyUnlessSuperuser):
-    def save_model(self, request, obj, form, change):
-        if not change:
-            obj.created_by = request.user
-        super().save_model(request, obj, form, change)
-
-    @admin.display(description='تاریخ شروع ساخت')
-    def j_start(self, obj):
-        return date2jalali(obj.manufacturing_start_date) if obj.manufacturing_start_date else "-"
-
-    @admin.display(description='تاریخ اتمام ساخت')
-    def j_end(self, obj):
-        return date2jalali(obj.manufacturing_end_date) if obj.manufacturing_end_date else "-"
-
-    @admin.display(description='تاریخ شروع تست و QC')
-    def j_test_qc_start(self, obj):
-        return date2jalali(obj.test_qc_start_date) if obj.test_qc_start_date else "-"
-
-    @admin.display(description='تاریخ پایان تست و QC')
-    def j_test_qc_end(self, obj):
-        return date2jalali(obj.test_qc_end_date) if obj.test_qc_end_date else "-"
-
-    @admin.display(description='تاریخ خروج محصول')
-    def j_exit(self, obj):
-        return date2jalali(obj.product_exit_date) if obj.product_exit_date else "-"
-
-    list_display = (
-        'product_name', 'product_serial_number',
-        'j_start', 'j_end',
-        'j_test_qc_start', 'j_test_qc_end',
-        'j_exit', 'exit_type', 'created_by'
-    )
-    list_filter = ('exit_type',)
-    search_fields = ('product_name', 'product_serial_number')
-    ordering = ['-manufacturing_start_date']
-    inlines = [ProductRawMaterialInline]
 
 @admin.register(ReturnedProduct)
 class ReturnedProductAdmin(ReadOnlyUnlessSuperuser):
@@ -229,3 +204,239 @@ class ProductCodeAdmin(ReadOnlyUnlessSuperuser):
 class ProductPartAdmin(ReadOnlyUnlessSuperuser):
     list_display = ('product_part',)
     search_fields = ('product_part',)
+
+class SecondryWarehouseRawMaterialInline(admin.TabularInline):
+    model = SecondryWarehouseRawMaterial
+    extra = 1
+    fields = ['raw_material_source', 'quantity', 'user_who_used']
+    readonly_fields = [
+        'raw_material_name', 'item_code', 'part_number',
+        'raw_material_entry_date', 'raw_material_price',
+        'unit', 'serial_number',
+    ]
+@admin.register(SecondryWarehouse)
+class SecondryWarehouseAdmin(ReadOnlyUnlessSuperuser):
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.display(description='تاریخ شروع ساخت')
+    def j_start(self, obj):
+        return date2jalali(obj.manufacturing_start_date) if obj.manufacturing_start_date else "-"
+
+    @admin.display(description='تاریخ اتمام ساخت')
+    def j_end(self, obj):
+        return date2jalali(obj.manufacturing_end_date) if obj.manufacturing_end_date else "-"
+
+    @admin.display(description='تاریخ شروع تست و QC')
+    def j_test_qc_start(self, obj):
+        return date2jalali(obj.test_qc_start_date) if obj.test_qc_start_date else "-"
+
+    @admin.display(description='تاریخ پایان تست و QC')
+    def j_test_qc_end(self, obj):
+        return date2jalali(obj.test_qc_end_date) if obj.test_qc_end_date else "-"
+
+    @admin.display(description='تاریخ خروج محصول')
+    def j_exit(self, obj):
+        return date2jalali(obj.product_exit_date) if obj.product_exit_date else "-"
+
+    list_display = (
+        'product_name', 'product_serial_number',
+        'j_start', 'j_end',
+        'j_test_qc_start', 'j_test_qc_end',
+        'j_exit', 'exit_type', 'created_by'
+    )
+    list_filter = ('product_name', 'product_serial_number', 'exit_type', 'created_by',)
+    search_fields = ('product_name', 'product_serial_number')
+    ordering = ['-manufacturing_start_date']
+    inlines = [SecondryWarehouseRawMaterialInline]
+
+
+
+class ProductSecondryProductInline(admin.TabularInline):
+        model = ProductSecondryProduct
+        extra = 1
+        fields = ['secondry_product', 'quantity']
+        # readonly_fields = ['secondry_product']
+
+
+@admin.register(ProductWarehouse)
+class ProductWarehouseAdmin(ReadOnlyUnlessSuperuser):
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.display(description='تاریخ شروع ساخت')
+    def j_start(self, obj):
+        return date2jalali(obj.manufacturing_start_date) if obj.manufacturing_start_date else "-"
+
+    @admin.display(description='تاریخ اتمام ساخت')
+    def j_end(self, obj):
+        return date2jalali(obj.manufacturing_end_date) if obj.manufacturing_end_date else "-"
+
+    @admin.display(description='تاریخ شروع تست و QC')
+    def j_test_qc_start(self, obj):
+        return date2jalali(obj.test_qc_start_date) if obj.test_qc_start_date else "-"
+
+    @admin.display(description='تاریخ پایان تست و QC')
+    def j_test_qc_end(self, obj):
+        return date2jalali(obj.test_qc_end_date) if obj.test_qc_end_date else "-"
+
+    @admin.display(description='تاریخ خروج محصول')
+    def j_exit(self, obj):
+        return date2jalali(obj.product_exit_date) if obj.product_exit_date else "-"
+
+    list_display = (
+        'product_name', 'product_serial_number',
+        'j_start', 'j_end',
+        'j_test_qc_start', 'j_test_qc_end',
+        'j_exit', 'exit_type', 'created_by'
+    )
+    list_filter = ('exit_type',)
+    search_fields = ('product_name', 'product_serial_number')
+    ordering = ['-manufacturing_start_date']
+    inlines = [ProductRawMaterialInline, ProductSecondryProductInline]
+
+
+
+@admin.register(ProductDelivery)
+class ProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.deliverer = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.display(description="محصولات اصلی")
+    def display_main_products(self, obj):
+        return ", ".join([
+            f"{item.product.product_name} (×{item.quantity})"
+            for item in obj.product_items.all()
+        ]) or "-"
+
+    @admin.display(description="محصولات ثانویه")
+    def display_secondary_products(self, obj):
+        return ", ".join([
+            f"{item.secondry_product.product_name} (×{item.quantity})"
+            for item in obj.secondry_items.all()
+        ]) or "-"
+
+    @admin.display(description="مواد اولیه")
+    def display_raw_materials(self, obj):
+        return ", ".join([
+            f"{item.raw_material.piece_name} (×{item.quantity})"
+            for item in obj.raw_material_items.all()
+        ]) or "-"
+
+    @admin.display(description='تاریخ تحویل')
+    def j_delivery_date(self, obj):
+        return date2jalali(obj.delivery_date) if obj.delivery_date else "-"
+
+    @admin.display(description='تاریخ بازگشت')
+    def j_return_date(self, obj):
+        return date2jalali(obj.return_date) if obj.return_date else "-"
+
+    list_display = (
+        'receiver_name',
+        'j_delivery_date',
+        'j_return_date',
+        'deliverer',
+        'display_main_products',
+        'display_secondary_products',
+        'display_raw_materials',
+    )
+
+    search_fields = ('receiver_name',)
+    ordering = ['-delivery_date']
+    inlines = [
+        type('ProductDeliveryProductInline', (admin.TabularInline,), {
+            'model': ProductDeliveryProduct,
+            'extra': 1,
+        }),
+        type('ProductDeliverySecondryProductInline', (admin.TabularInline,), {
+            'model': ProductDeliverySecondryProduct,
+            'extra': 1,
+        }),
+        type('ProductDeliveryRawMaterialInline', (admin.TabularInline,), {
+            'model': ProductDeliveryRawMaterial,
+            'extra': 1,
+        }),
+    ]
+
+
+class ExternalProductDeliveryProductInline(admin.TabularInline):
+    model = ExternalProductDeliveryProduct
+    extra = 1
+
+
+class ExternalProductDeliverySecondryProductInline(admin.TabularInline):
+    model = ExternalProductDeliverySecondryProduct
+    extra = 1
+
+
+class ExternalProductDeliveryRawMaterialInline(admin.TabularInline):
+    model = ExternalProductDeliveryRawMaterial
+    extra = 1
+
+
+@admin.register(ExternalProductDelivery)
+class ExternalProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
+    @admin.display(description="تاریخ تحویل")
+    def j_delivery_date(self, obj):
+        return date2jalali(obj.delivery_date) if obj.delivery_date else "-"
+
+    @admin.display(description="تاریخ بازگشت")
+    def j_return_date(self, obj):
+        return date2jalali(obj.return_date) if obj.return_date else "-"
+
+    list_display = (
+        'receiver_name', 'j_delivery_date', 'j_return_date', 'deliverer'
+    )
+    search_fields = ('receiver_name',)
+    ordering = ['-delivery_date']
+    inlines = [
+        ExternalProductDeliveryProductInline,
+        ExternalProductDeliverySecondryProductInline,
+        ExternalProductDeliveryRawMaterialInline
+    ]
+
+
+
+
+@admin.register(ReturnedFromCustomer)
+class ReturnedFromCustomerAdmin(ReadOnlyUnlessSuperuser):
+    @admin.display(description='تاریخ بازگشت')
+    def j_return_date(self, obj):
+        return date2jalali(obj.return_date) if obj.return_date else "-"
+
+    list_display = (
+        'customer_name',
+        'product_name',
+        'product_serial_number',
+        'product_part_number',
+        'product_item_code',
+        'j_return_date',
+        'received_by',
+    )
+    search_fields = ('customer_name', 'product_name', 'product_part_number', 'product_item_code', 'product_serial_number')
+    list_filter = ('customer_name', 'product_name', 'product_part_number', 'product_item_code', 'product_serial_number')
+    ordering = ['-return_date']
+
+
+
+@admin.register(BorrowedProduct)
+class BorrowedProductAdmin(ReadOnlyUnlessSuperuser):
+    @admin.display(description="تاریخ تحویل")
+    def j_delivery_date(self, obj):
+        return date2jalali(obj.delivery_date) if obj.delivery_date else "-"
+
+    @admin.display(description="تاریخ بازگرداندن")
+    def j_return_date(self, obj):
+        return date2jalali(obj.return_date) if obj.return_date else "-"
+
+    list_display = (
+        'product_name', 'serial_number', 'giver_company', 'receiver_person', 'j_delivery_date', 'j_return_date'
+    )
+    search_fields = ('product_name', 'serial_number', 'giver_company', 'receiver_person')
+    ordering = ['-delivery_date']
