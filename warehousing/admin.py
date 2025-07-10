@@ -1,4 +1,5 @@
 from django.contrib import admin, messages
+from django.http import HttpRequest
 from django.utils.html import format_html
 from jalali_date import date2jalali
 
@@ -38,7 +39,8 @@ class ReadOnlyUnlessSuperuser(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
-
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser or request.user.groups.filter(name=ALLOWED_GROUP).exists() 
 # ====== action ======
 @admin.action(description="انتقال به انبار مواد اولیه")
 def transfer_to_raw_material(modeladmin, request, queryset):
@@ -382,6 +384,10 @@ class ExternalProductDeliveryRawMaterialInline(admin.TabularInline):
 
 @admin.register(ExternalProductDelivery)
 class ExternalProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
     @admin.display(description="تاریخ تحویل")
     def j_delivery_date(self, obj):
         return date2jalali(obj.delivery_date) if obj.delivery_date else "-"
@@ -406,6 +412,11 @@ class ExternalProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
 
 @admin.register(ReturnedFromCustomer)
 class ReturnedFromCustomerAdmin(ReadOnlyUnlessSuperuser):
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
     @admin.display(description='تاریخ بازگشت')
     def j_return_date(self, obj):
         return date2jalali(obj.return_date) if obj.return_date else "-"
@@ -427,6 +438,11 @@ class ReturnedFromCustomerAdmin(ReadOnlyUnlessSuperuser):
 
 @admin.register(BorrowedProduct)
 class BorrowedProductAdmin(ReadOnlyUnlessSuperuser):
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
     @admin.display(description="تاریخ تحویل")
     def j_delivery_date(self, obj):
         return date2jalali(obj.delivery_date) if obj.delivery_date else "-"
