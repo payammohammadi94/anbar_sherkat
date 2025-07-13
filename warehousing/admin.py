@@ -41,6 +41,7 @@ class ReadOnlyUnlessSuperuser(admin.ModelAdmin):
         return request.user.is_superuser
     def has_view_permission(self, request, obj=None):
         return request.user.is_superuser or request.user.groups.filter(name=ALLOWED_GROUP).exists() 
+
 # ====== action ======
 @admin.action(description="انتقال به انبار مواد اولیه")
 def transfer_to_raw_material(modeladmin, request, queryset):
@@ -69,7 +70,8 @@ def transfer_to_raw_material(modeladmin, request, queryset):
     if skipped:
         messages.warning(request, f"{skipped} قطعه نادیده گرفته شد.")
 
-@admin.action(description="انتقال به انبار بازگشتی‌ها")
+
+@admin.action(description="انتقال به انبار بازگشت به فروشنده")
 def send_to_returned_products(modeladmin, request, queryset):
     transferred, already_returned = 0, 0
     for item in queryset:
@@ -92,7 +94,7 @@ def send_to_returned_products(modeladmin, request, queryset):
         else:
             already_returned += 1
     if transferred:
-        messages.success(request, f"{transferred} قطعه منتقل شد.")
+        messages.success(request, f"{transferred} قطعه به انبار بازگشت به فروشنده منتقل شد.")
     if already_returned:
         messages.warning(request, f"{already_returned} قبلاً منتقل شده بودند.")
 
@@ -120,6 +122,8 @@ class QuarantineWarehouseAdmin(ReadOnlyUnlessSuperuser):
     def colored_status(self, obj):
         if obj.status == 'used_in_product':
             color, label = 'blue', 'استفاده شده در محصول'
+        elif obj.status == 'used_in_secondry_warehouse':
+            color, label = 'brown','استفاده شده در انبار ثانویه'
         elif obj.destination == 'raw_material':
             color, label = 'green', 'منتقل شده به مواد اولیه'
         elif obj.destination == 'returned':
@@ -131,11 +135,11 @@ class QuarantineWarehouseAdmin(ReadOnlyUnlessSuperuser):
         return format_html('<span style="background-color:{}; color:white; padding:2px 6px; border-radius:4px;">{}</span>', color, label)
 
     list_display = (
-        'piece_name', 'item_code', 'part_number', 'quantity',
+        'piece_name', 'item_code', 'part_number','serial_number', 'quantity',
         'j_entry_date', 'supplier', 'j_test_date', 'j_qc_date', 'destination', 'created_by', 'colored_status'
     )
-    list_filter = ('piece_name', 'item_code', 'part_number', 'destination')
-    search_fields = ('piece_name', 'item_code__product_code', 'part_number__product_part', 'supplier')
+    list_filter = ('piece_name', 'item_code', 'part_number','serial_number', 'destination')
+    search_fields = ('piece_name', 'item_code__product_code', 'serial_number', 'part_number__product_part', 'supplier')
     ordering = ['-entry_date']
     actions = [transfer_to_raw_material, send_to_returned_products]
 
@@ -151,10 +155,10 @@ class RawMaterialWarehouseAdmin(ReadOnlyUnlessSuperuser):
         return date2jalali(obj.entry_date) if obj.entry_date else "-"
 
     list_display = (
-        'piece_name', 'item_code', 'part_number', 'quantity',
+        'piece_name', 'item_code', 'part_number', 'serial_number','quantity',
         'j_entry_date', 'price', 'unit', 'serial_number', 'created_by'
     )
-    list_filter = ('piece_name', 'item_code', 'part_number', 'unit')
+    list_filter = ('piece_name', 'item_code', 'part_number','serial_number', 'unit')
     search_fields = ('piece_name', 'item_code__product_code', 'part_number__product_part', 'serial_number')
     ordering = ['-entry_date']
 
@@ -211,17 +215,20 @@ class SecondryWarehouseRawMaterialInline(admin.TabularInline):
     model = SecondryWarehouseRawMaterial
     extra = 1
     fields = ['raw_material_source', 'quantity', 'user_who_used']
-    readonly_fields = [
-        'raw_material_name', 'item_code', 'part_number',
-        'raw_material_entry_date', 'raw_material_price',
-        'unit', 'serial_number',
-    ]
+
 @admin.register(SecondryWarehouse)
 class SecondryWarehouseAdmin(ReadOnlyUnlessSuperuser):
     def save_model(self, request, obj, form, change):
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+    
+    @admin.display(description="مواد انبار اولیه")
+    def display_main_products(self, obj):
+        return ", ".join([
+            f"{item.raw_material_source.piece_name}-{item.raw_material_source.serial_number}-{item.raw_material_source.part_number}-(×{item.quantity})"
+            for item in obj.raw_materials.all()
+        ]) or "-"
 
     @admin.display(description='تاریخ شروع ساخت')
     def j_start(self, obj):
@@ -245,7 +252,7 @@ class SecondryWarehouseAdmin(ReadOnlyUnlessSuperuser):
 
     list_display = (
         'product_name', 'product_serial_number',
-        'j_start', 'j_end',
+        'j_start','display_main_products', 'j_end',
         'j_test_qc_start', 'j_test_qc_end',
         'j_exit', 'exit_type', 'created_by'
     )
@@ -254,13 +261,10 @@ class SecondryWarehouseAdmin(ReadOnlyUnlessSuperuser):
     ordering = ['-manufacturing_start_date']
     inlines = [SecondryWarehouseRawMaterialInline]
 
-
-
 class ProductSecondryProductInline(admin.TabularInline):
         model = ProductSecondryProduct
         extra = 1
         fields = ['secondry_product', 'quantity']
-        # readonly_fields = ['secondry_product']
 
 
 @admin.register(ProductWarehouse)
@@ -296,12 +300,10 @@ class ProductWarehouseAdmin(ReadOnlyUnlessSuperuser):
         'j_test_qc_start', 'j_test_qc_end',
         'j_exit', 'exit_type', 'created_by'
     )
-    list_filter = ('exit_type',)
+    list_filter = ('product_name','product_serial_number',)
     search_fields = ('product_name', 'product_serial_number')
     ordering = ['-manufacturing_start_date']
     inlines = [ProductRawMaterialInline, ProductSecondryProductInline]
-
-
 
 @admin.register(ProductDelivery)
 class ProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
@@ -341,6 +343,7 @@ class ProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
 
     list_display = (
         'receiver_name',
+        'user_name',
         'j_delivery_date',
         'j_return_date',
         'deliverer',
@@ -349,7 +352,8 @@ class ProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
         'display_raw_materials',
     )
 
-    search_fields = ('receiver_name',)
+    search_fields = ('receiver_name','user_name',)
+    list_filter = ('receiver_name','user_name',)
     ordering = ['-delivery_date']
     inlines = [
         type('ProductDeliveryProductInline', (admin.TabularInline,), {
@@ -366,21 +370,17 @@ class ProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
         }),
     ]
 
-
 class ExternalProductDeliveryProductInline(admin.TabularInline):
     model = ExternalProductDeliveryProduct
     extra = 1
-
 
 class ExternalProductDeliverySecondryProductInline(admin.TabularInline):
     model = ExternalProductDeliverySecondryProduct
     extra = 1
 
-
 class ExternalProductDeliveryRawMaterialInline(admin.TabularInline):
     model = ExternalProductDeliveryRawMaterial
     extra = 1
-
 
 @admin.register(ExternalProductDelivery)
 class ExternalProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
@@ -388,6 +388,28 @@ class ExternalProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
         if not change:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+    
+    @admin.display(description="محصولات اصلی")
+    def display_main_products(self, obj):
+        return ", ".join([
+            f"{item.product.product_name}-{item.product.product_serial_number}-(×{item.quantity})"
+            for item in obj.product_items.all()
+        ]) or "-"
+
+    @admin.display(description="محصولات ثانویه")
+    def display_secondary_products(self, obj):
+        return ", ".join([
+            f"{item.secondry_product.product_name}-{item.secondry_product.product_serial_number}-(×{item.quantity})"
+            for item in obj.secondry_items.all()
+        ]) or "-"
+
+    @admin.display(description="مواد اولیه")
+    def display_raw_materials(self, obj):
+        return ", ".join([
+            f"{item.raw_material.piece_name}-{item.raw_material.serial_number}-{item.raw_material.part_number}-(×{item.quantity})"
+            for item in obj.raw_material_items.all()
+        ]) or "-"
+    
     @admin.display(description="تاریخ تحویل")
     def j_delivery_date(self, obj):
         return date2jalali(obj.delivery_date) if obj.delivery_date else "-"
@@ -397,7 +419,7 @@ class ExternalProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
         return date2jalali(obj.return_date) if obj.return_date else "-"
 
     list_display = (
-        'receiver_name', 'j_delivery_date', 'j_return_date', 'deliverer'
+        'receiver_name', 'j_delivery_date', 'j_return_date','display_main_products','display_secondary_products','display_raw_materials', 'deliverer'
     )
     search_fields = ('receiver_name',)
     ordering = ['-delivery_date']
@@ -406,9 +428,6 @@ class ExternalProductDeliveryAdmin(ReadOnlyUnlessSuperuser):
         ExternalProductDeliverySecondryProductInline,
         ExternalProductDeliveryRawMaterialInline
     ]
-
-
-
 
 @admin.register(ReturnedFromCustomer)
 class ReturnedFromCustomerAdmin(ReadOnlyUnlessSuperuser):
@@ -433,8 +452,6 @@ class ReturnedFromCustomerAdmin(ReadOnlyUnlessSuperuser):
     search_fields = ('customer_name', 'product_name', 'product_part_number', 'product_item_code', 'product_serial_number')
     list_filter = ('customer_name', 'product_name', 'product_part_number', 'product_item_code', 'product_serial_number')
     ordering = ['-return_date']
-
-
 
 @admin.register(BorrowedProduct)
 class BorrowedProductAdmin(ReadOnlyUnlessSuperuser):

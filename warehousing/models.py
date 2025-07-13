@@ -83,7 +83,8 @@ class QuarantineWarehouse(models.Model):
     ('approved', 'تایید شده'),
     ('rejected', 'رد شده'),
     ('transferred', 'منتقل شده'),
-     ('used_in_product', 'استفاده شده در محصول'),
+    ('used_in_product', 'استفاده شده در محصول'),
+    ('used_in_secondry_warehouse', 'استفاده شده در انبار ثانویه'),
 ]
     
     UNIT_PRICE_CHOICES = [
@@ -210,8 +211,8 @@ class ReturnedProduct(models.Model):
         return f"بازگشتی: {self.piece_name} ({self.item_code})"
 
     class Meta:
-        verbose_name = "محصول بازگشتی به فروشنده"
-        verbose_name_plural = "محصولات بازگشتی به فروشنده"
+        verbose_name = "محصول برگشتی به فروشنده"
+        verbose_name_plural = "محصولات برگشتی به فروشنده"
 
 class ProductRawMaterial(models.Model):
     created_by = models.ForeignKey(
@@ -363,18 +364,18 @@ class SecondryWarehouseRawMaterial(models.Model):
         RawMaterialWarehouse, on_delete=models.SET_NULL,
         null=True, blank=True, verbose_name="انتخاب از انبار مواد اولیه"
     )
-    raw_material_name = models.CharField(max_length=255, verbose_name="ماده اولیه")
+    raw_material_name = models.CharField(max_length=255, verbose_name="ماده اولیه", null=True, blank=True)
     part_number = models.ForeignKey(ProductPart, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="پارت کالا")
     item_code = models.ForeignKey(ProductCode, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="کد کالا")
+    serial_number = models.CharField(max_length=255, blank=True, null=True, verbose_name="شماره سریال")
     quantity = models.IntegerField(verbose_name="مقدار")
-    user_who_used = models.CharField(max_length=255, verbose_name="استفاده کننده")
-    raw_material_entry_date = models.DateField(verbose_name="تاریخ ورود ماده اولیه")
-    raw_material_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="قیمت ماده اولیه")
+    user_who_used = models.CharField(blank=True, null=True, max_length=255, verbose_name="استفاده کننده")
+    raw_material_entry_date = models.DateField(verbose_name="تاریخ ورود ماده اولیه", null=True, blank=True)
+    raw_material_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="قیمت ماده اولیه", null=True, blank=True)
     unit = models.CharField(max_length=50, verbose_name="واحد", choices=[
         ('dollar', 'دلار'),
         ('toman', 'تومان')
-    ])
-    serial_number = models.CharField(max_length=255, blank=True, null=True, verbose_name="شماره سریال")
+    ], null=True, blank=True)
 
     def save(self, *args, **kwargs):
         raw = self.raw_material_source
@@ -427,7 +428,7 @@ class SecondryWarehouseRawMaterial(models.Model):
 
         # وضعیت قرنطینه
         if raw and raw.quarantine_reference:     
-            raw.quarantine_reference.status = 'used_in_product'
+            raw.quarantine_reference.status = 'used_in_secondry_warehouse'
             raw.quarantine_reference.save()
 
         super().save(*args, **kwargs)
@@ -453,7 +454,7 @@ class SecondryWarehouseRawMaterial(models.Model):
         return f"{self.raw_material_name} for {self.secondryWarehouse.product_name}"
 
     class Meta:
-        verbose_name = "ماده اولیه انبار ثانویه"
+        verbose_name = "مواد اولیه انبار ثانویه"
         verbose_name_plural = "مواد اولیه انبار ثانویه"
 
 class ProductSecondryProduct(models.Model):
@@ -480,7 +481,8 @@ class ProductSecondryProduct(models.Model):
         verbose_name_plural = "محصولات ثانویه در محصول نهایی"
 
 class ProductDelivery(models.Model):
-    receiver_name = models.CharField(max_length=255, verbose_name="تحویل گیرنده")
+    receiver_name = models.CharField(max_length=255, verbose_name="نام و نام خانوادگی تحویل گیرنده")
+    user_name = models.CharField(blank=True, null=True,max_length=255, verbose_name="شناسه کاربری تحویل گیرنده")
     delivery_date = models.DateField(verbose_name="تاریخ تحویل")
     return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ بازگشت")
     deliverer = models.ForeignKey(
@@ -502,18 +504,22 @@ class ProductDeliveryProduct(models.Model):
     delivery = models.ForeignKey(ProductDelivery, on_delete=models.CASCADE, related_name="product_items")
     product = models.ForeignKey(ProductWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="محصول")
     quantity = models.IntegerField(verbose_name="تعداد")
+    delivery_date = models.DateField(blank=True, null=True, verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ برگشت")
 
 class ProductDeliverySecondryProduct(models.Model):
     delivery = models.ForeignKey(ProductDelivery, on_delete=models.CASCADE, related_name="secondry_items")
     secondry_product = models.ForeignKey(SecondryWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="محصول ثانویه")
     quantity = models.IntegerField(verbose_name="تعداد")
+    delivery_date = models.DateField(blank=True, null=True, verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ برگشت")
 
 class ProductDeliveryRawMaterial(models.Model):
     delivery = models.ForeignKey(ProductDelivery, on_delete=models.CASCADE, related_name="raw_material_items")
     raw_material = models.ForeignKey(RawMaterialWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ماده اولیه")
     quantity = models.IntegerField(verbose_name="تعداد")
-
-
+    delivery_date = models.DateField(blank=True, null=True, verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ برگشت")
 
 class ExternalProductDelivery(models.Model):
     receiver_name = models.CharField(max_length=255, verbose_name="تحویل گیرنده (خارج از شرکت)")
@@ -534,27 +540,26 @@ class ExternalProductDelivery(models.Model):
         verbose_name = "تحویل محصول به خارج از شرکت"
         verbose_name_plural = "تحویل محصولات به خارج از شرکت"
 
-
 class ExternalProductDeliveryProduct(models.Model):
     delivery = models.ForeignKey(ExternalProductDelivery, on_delete=models.CASCADE, related_name="product_items")
     product = models.ForeignKey(ProductWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="محصول")
     quantity = models.IntegerField(verbose_name="تعداد")
-
+    delivery_date = models.DateField(blank=True, null=True,verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ بازگشت")
 
 class ExternalProductDeliverySecondryProduct(models.Model):
     delivery = models.ForeignKey(ExternalProductDelivery, on_delete=models.CASCADE, related_name="secondry_items")
     secondry_product = models.ForeignKey(SecondryWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="محصول ثانویه")
     quantity = models.IntegerField(verbose_name="تعداد")
-
+    delivery_date = models.DateField(blank=True, null=True,verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ بازگشت")
 
 class ExternalProductDeliveryRawMaterial(models.Model):
     delivery = models.ForeignKey(ExternalProductDelivery, on_delete=models.CASCADE, related_name="raw_material_items")
     raw_material = models.ForeignKey(RawMaterialWarehouse, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ماده اولیه")
     quantity = models.IntegerField(verbose_name="تعداد")
-
-
-
-
+    delivery_date = models.DateField(blank=True, null=True,verbose_name="تاریخ تحویل")
+    return_date = models.DateField(blank=True, null=True, verbose_name="تاریخ بازگشت")
 
 class ReturnedFromCustomer(models.Model):
     customer_name = models.CharField(max_length=255, verbose_name="نام و نام خانوادگی کارفرما")
@@ -579,8 +584,6 @@ class ReturnedFromCustomer(models.Model):
         verbose_name = "محصول برگشتی از کارفرما"
         verbose_name_plural = "محصولات برگشتی از کارفرما"
     
-
-
 class BorrowedProduct(models.Model):
     product_name = models.CharField(max_length=255, verbose_name="نام محصول")
     serial_number = models.CharField(max_length=255, verbose_name="شماره سریال محصول")
